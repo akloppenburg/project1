@@ -166,7 +166,7 @@ class project1():
         self.isAsymmetricRight = False
         #symmetric detection
         for i in range(266, 374):
-            if(data.ranges[i] <= 0.3):
+            if(data.ranges[i] <= 0.5):
                 self.isSymmetric = True
                 break
         #asymmetric detection
