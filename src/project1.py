@@ -22,7 +22,7 @@ class project1():
         self.isAsymmetricLeft = False
         self.isAsymmetricRight = False
 
-        self.cmd_vel = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=3)
+        self.cmd_vel = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
 
         rospy.init_node('project1')
 
@@ -46,8 +46,6 @@ class project1():
             #if the bumpers are NOT engaged, check for teleoperation
             elif(self.keyPressed):
                 #listener above handles all key input, so this just makes sure that no other Twist commands are sent
-                rospy.loginfo("teleop")
-                continue
             #if bumpers are NOT engaged and no arrow keys are pressed, engage normal movement
             else:
                 #if symmetric obstacle is detected, complete full 180 spin and then continue
@@ -76,31 +74,12 @@ class project1():
                 #otherwise, drive forwards and turn every meter
                 else:
                     #drive one meter, stopping if any other events occur
-                    self.drive(0.3, 0.5)
+                    self.drive(0.3, 0.3)
                     rospy.loginfo("drove")
-                    #for i in range(0, 20):
-                    #    if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
-                    #        break
-                    #    else:
-                    #        self.move_cmd.linear.x = 0.5
-                    #        self.move_cmd.angular.z = 0
-                    #        self.cmd_vel.publish(self.move_cmd)
-                    #        rospy.loginfo("driving")
-
                     #turn randomly, stopping if any bump or key press events occur
                     random_turn = random.uniform(-15, 15) #in degrees
-                    self.turn(random_turn, 15)
+                    self.turn(random_turn, 5)
                     rospy.loginfo("turned " + str(random_turn) + " degrees")
-                    #rospy.loginfo("random turn = " + str(random_turn))
-                    #for i in range(0, int(math.ceil(random_turn*10))):
-                    #   if(self.isBumped or self.keyPressed):
-                    #        rospy.loginfo("turning broken")
-                    #        break
-                    #    else:
-                    #        self.move_cmd.linear.x = 0.0
-                    #        self.move_cmd.angular.z = 1
-                    #        self.cmd_vel.publish(self.move_cmd)
-                    #        rospy.loginfo("turning")
                     
                 
         self.r.sleep()
@@ -114,21 +93,23 @@ class project1():
     def turn(self, angle, speed):
 
         velocity_msg = Twist()
+
+        #Converting from angles to radians
+        angular_speed = speed*2*math.pi/360
+        relative_angle = angle*2*math.pi/360
+
         velocity_msg.linear.x = 0
-        velocity_msg.angular.z = speed
+        velocity_msg.angular.z = angular_speed
         
         t0 = rospy.Time.now().to_sec()
         current_angle = 0
         
-        while(current_angle < angle):
-            rospy.loginfo("current angle " + str(current_angle))
-            rospy.loginfo("angle " + str(angle))
+        while(current_angle < relative_angle):
             self.cmd_vel.publish(velocity_msg)
             t1 = rospy.Time.now().to_sec()
-            current_angle = speed*(t1-t0)
+            current_angle = angular_speed*(t1-t0)
             
         #Forcing our robot to stop
-        #velocity_msg.angular.z = 0
         self.cmd_vel.publish(Twist())
 
 
@@ -146,15 +127,11 @@ class project1():
         current_distance = 0
         
         while(current_distance < distance):
-            rospy.loginfo("current distance " + str(current_distance))
-            rospy.loginfo("distance " + str(distance))
             self.cmd_vel.publish(velocity_msg)
             t1 = rospy.Time.now().to_sec()
             current_distance = speed*(t1-t0)
-        rospy.loginfo("DONEDONEDONE")
             
         #Forcing our robot to stop
-        velocity_msg.linear.x = 0
         self.cmd_vel.publish(Twist())
 
 
@@ -210,7 +187,6 @@ class project1():
 
     def on_release(self, key):
         self.keyPressed = False
-        rospy.loginfo("key up")
 
  
 if __name__ == '__main__':
