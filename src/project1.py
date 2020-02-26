@@ -45,6 +45,7 @@ class project1():
                 rospy.loginfo("bumped")
             #if the bumpers are NOT engaged, check for teleoperation
             elif(self.keyPressed):
+                continue
                 #listener above handles all key input, so this just makes sure that no other Twist commands are sent
             #if bumpers are NOT engaged and no arrow keys are pressed, engage normal movement
             else:
@@ -92,6 +93,10 @@ class project1():
 
     def turn(self, angle, speed):
 
+        if(self.isBumped or self.keyPressed):
+            rospy.loginfo("turning machine broke")
+            return
+
         velocity_msg = Twist()
 
         #Converting from angles to radians
@@ -105,6 +110,9 @@ class project1():
         current_angle = 0
         
         while(current_angle < relative_angle):
+            if(self.isBumped or self.keyPressed):
+                rospy.loginfo("turning machine broke")
+                return
             self.cmd_vel.publish(velocity_msg)
             t1 = rospy.Time.now().to_sec()
             current_angle = angular_speed*(t1-t0)
@@ -116,7 +124,7 @@ class project1():
     def drive(self, distance, speed):
 
         if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
-            print("driving machine broke")
+            rospy.loginfo("driving machine broke")
             return
 
         velocity_msg = Twist()
@@ -127,6 +135,9 @@ class project1():
         current_distance = 0
         
         while(current_distance < distance):
+            if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
+                rospy.loginfo("driving machine broke")
+                return
             self.cmd_vel.publish(velocity_msg)
             t1 = rospy.Time.now().to_sec()
             current_distance = speed*(t1-t0)
@@ -138,8 +149,12 @@ class project1():
     def BumperCallback(self, data):
         if (data.state == 1):
             self.isBumped = True
-        else:
+            rospy.loginfo("bumped")
+        elif (data.state == 0):
             self.isBumped = False
+            rospy.loginfo("un-bumped")
+        #else:
+        #    self.isBumped = False
     
     #640 values from our laser
     #middle 108(straight ahead and +- about 15 degrees) are used for symmetric detection
