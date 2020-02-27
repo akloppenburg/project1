@@ -52,14 +52,40 @@ class project1():
                 #if symmetric obstacle is detected, complete full 180 spin and then continue
                 if(self.isSymmetric):
                     #turn a full 180, stopping if we bump into anything or we do teleoperation
-                    rospy.loginfo("escape")
-                    for i in range(0, 32):
-                        if(self.isBumped or self.keyPressed):
-                            break
-                        else:
-                            self.move_cmd.linear.x = 0.0
-                            self.move_cmd.angular.z = 1
-                            self.cmd_vel.publish(self.move_cmd)
+                    speed = 75
+                    angle = 180
+                    rospy.loginfo("symmetric detected (0.5m)...halting...")
+
+                    #Converting from angles to radians
+                    angular_speed = speed*2*math.pi/360
+                    relative_angle = angle*2*math.pi/360
+
+                    #halt the robot
+                    self.move_cmd.linear.x=0
+                    self.move_cmd.linear.y=0
+                    self.move_cmd.linear.z=0
+                    self.move_cmd.angular.x=0
+                    self.move_cmd.angular.y=0
+
+                    #begin rotation
+                    rospy.loginfo("rotating...")
+                    self.move_cmd.angular.z=angular_speed
+
+                    #setting the current time for distance calculus
+                    t0 = rospy.Time.now().to_sec()
+                    current_angle = 0
+                    while (current_angle < relative_angle):
+                        rospy.loginfo("looping")
+                        self.cmd_vel.publish(self.move_cmd)
+                        t1 = rospy.Time.now().to_sec()
+                        current_angle = angular_speed*(t1-t0)
+
+                    #force our robot to stop
+                    rospy.loginfo("rotation complete.")   
+                    self.move_cmd.angular.z = 0
+                    self.cmd_vel.publish(Twist())
+                                    
+                            
                 #if asymmetric obstacle is detected on the left, veer right
                 elif(self.isAsymmetricLeft):
                     rospy.loginfo("avoid left")
@@ -74,6 +100,7 @@ class project1():
                     self.cmd_vel.publish(self.move_cmd)
                 #otherwise, drive forwards and turn every meter
                 else:
+                    rospy.loginfo("moving forward (normal)...")
                     #drive one meter, stopping if any other events occur
                     self.drive(0.3, 0.3)
                     rospy.loginfo("drove")
@@ -166,9 +193,12 @@ class project1():
         self.isAsymmetricRight = False
         #symmetric detection
         for i in range(266, 374):
+            print "distance is:", data.ranges[320]
             if(data.ranges[i] <= 0.5):
                 self.isSymmetric = True
                 break
+            else:
+                self.isSymmetric = False
         #asymmetric detection
         for i in range(0, 265):
             if(data.ranges[i] <= 0.3):
