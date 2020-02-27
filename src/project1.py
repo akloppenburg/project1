@@ -76,28 +76,31 @@ class project1():
                 #otherwise, drive forwards and turn every meter
                 else:
                     #drive one meter, stopping if any other events occur
-                    rospy.loginfo("entered driving")
-                    for i in range(0, 20):
-                        if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
-                            break
-                        else:
-                            self.move_cmd.linear.x = 0.5
-                            self.move_cmd.angular.z = 0
-                            self.cmd_vel.publish(self.move_cmd)
-                            rospy.loginfo("driving")
+                    self.drive(0.3, 0.5)
+                    rospy.loginfo("drove")
+                    #for i in range(0, 20):
+                    #    if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
+                    #        break
+                    #    else:
+                    #        self.move_cmd.linear.x = 0.5
+                    #        self.move_cmd.angular.z = 0
+                    #        self.cmd_vel.publish(self.move_cmd)
+                    #        rospy.loginfo("driving")
 
                     #turn randomly, stopping if any bump or key press events occur
-                    random_turn = random.uniform(-0.262, 0.262)
+                    random_turn = random.uniform(-15, 15) #in degrees
+                    self.turn(random_turn, 15)
+                    rospy.loginfo("turned " + str(random_turn) + " degrees")
                     #rospy.loginfo("random turn = " + str(random_turn))
-                    for i in range(0, int(math.ceil(random_turn*10))):
-                        if(self.isBumped or self.keyPressed):
-                            rospy.loginfo("turning broken")
-                            break
-                        else:
-                            self.move_cmd.linear.x = 0.0
-                            self.move_cmd.angular.z = 1
-                            self.cmd_vel.publish(self.move_cmd)
-                            rospy.loginfo("turning")
+                    #for i in range(0, int(math.ceil(random_turn*10))):
+                    #   if(self.isBumped or self.keyPressed):
+                    #        rospy.loginfo("turning broken")
+                    #        break
+                    #    else:
+                    #        self.move_cmd.linear.x = 0.0
+                    #        self.move_cmd.angular.z = 1
+                    #        self.cmd_vel.publish(self.move_cmd)
+                    #        rospy.loginfo("turning")
                     
                 
         self.r.sleep()
@@ -108,6 +111,53 @@ class project1():
         self.cmd_vel.publish(Twist())
         rospy.sleep(1)
 
+    def turn(self, angle, speed):
+
+        velocity_msg = Twist()
+        velocity_msg.linear.x = 0
+        velocity_msg.angular.z = speed
+        
+        t0 = rospy.Time.now().to_sec()
+        current_angle = 0
+        
+        while(current_angle < angle):
+            rospy.loginfo("current angle " + str(current_angle))
+            rospy.loginfo("angle " + str(angle))
+            self.cmd_vel.publish(velocity_msg)
+            t1 = rospy.Time.now().to_sec()
+            current_angle = speed*(t1-t0)
+            
+        #Forcing our robot to stop
+        #velocity_msg.angular.z = 0
+        self.cmd_vel.publish(Twist())
+
+
+    def drive(self, distance, speed):
+
+        if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
+            print("driving machine broke")
+            return
+
+        velocity_msg = Twist()
+        velocity_msg.angular.z = 0
+        velocity_msg.linear.x = speed
+        
+        t0 = rospy.Time.now().to_sec()
+        current_distance = 0
+        
+        while(current_distance < distance):
+            rospy.loginfo("current distance " + str(current_distance))
+            rospy.loginfo("distance " + str(distance))
+            self.cmd_vel.publish(velocity_msg)
+            t1 = rospy.Time.now().to_sec()
+            current_distance = speed*(t1-t0)
+        rospy.loginfo("DONEDONEDONE")
+            
+        #Forcing our robot to stop
+        velocity_msg.linear.x = 0
+        self.cmd_vel.publish(Twist())
+
+
     def BumperCallback(self, data):
         if (data.state == 1):
             self.isBumped = True
@@ -117,7 +167,7 @@ class project1():
     #640 values from our laser
     #middle 108(straight ahead and +- about 15 degrees) are used for symmetric detection
     #rest are used for automatic avoidance and escaping
-    def LaserCallback(self,data):
+    def LaserCallback(self, data):
         #set values as false, only changing them if there is a symmetric or asymmetric obstacle within 1 foot
         self.isSymmetric = False
         self.isAsymmetricLeft = False
