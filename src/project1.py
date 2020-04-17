@@ -23,6 +23,7 @@ class project1():
         self.isSymmetric = False
         self.isAsymmetricLeft = False
         self.isAsymmetricRight = False
+        self.obstacleInSight = False
 
         #robot navigation messages will be published to this topic
         self.cmd_vel = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
@@ -59,6 +60,7 @@ class project1():
             else:
                 #if symmetric obstacle is detected, complete full 180 spin and then continue
                 if(self.isSymmetric):
+                    rospy.loginfo(self.obstacleInSight)
                     #setting our desired angular velocity and desired angle
                     speed = 75
                     angle = 180
@@ -93,6 +95,7 @@ class project1():
                             
                 #if asymmetric obstacle is detected on the left, veer right
                 elif(self.isAsymmetricLeft):
+                    rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
@@ -127,6 +130,7 @@ class project1():
 
                 #if asymmetric obstacle is detected on the right, veer left
                 elif(self.isAsymmetricRight):
+                    rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
@@ -156,9 +160,9 @@ class project1():
 
                     #stop the robot by publishing an empty Twist message (has linear and angular velocity zero)
                     self.cmd_vel.publish(Twist())
-
-                #otherwise, drive forwards and turn every meter
-                else:
+                # if there are no obstacles detected, drive forwards and turn every meter
+                elif not(self.obstacleInSight):
+                    rospy.loginfo(self.obstacleInSight)
                     #drive one meter, stopping if any other events occur
                     self.drive(0.3, 0.3)
                     #turn randomly, stopping if any bump or key press events occur
@@ -227,7 +231,7 @@ class project1():
         #loop until the entire angle has been traversed, publishing each loop
         while(current_distance < distance):
             #exit the program if any of the higher-priority actions occur
-            if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight):
+            if(self.isBumped or self.keyPressed or self.isSymmetric or self.isAsymmetricLeft or self.isAsymmetricRight or self.obstacleInSight):
                 return
             self.cmd_vel.publish(velocity_msg)
             t1 = rospy.Time.now().to_sec()
@@ -253,33 +257,40 @@ class project1():
         self.isSymmetric = False
         self.isAsymmetricLeft = False
         self.isAsymmetricRight = False
+        self.obstacleInSight = False
         #symmetric detection
         for i in range(266, 374): #middle 108 values (about 30 degrees)
             #if any values in that range are less than 1/2 meter (the laser is ineffective at a foot, this is as close as we could get),
             #set the flag to true and exit the loop
-            if(data.ranges[i] <= 0.5):
+            if(data.ranges[i] <= 0.6):
                 self.isSymmetric = True
+                self.obstacleInSight = True
                 break
             else:
                 #if there are no obstacles directly in front of the robot within that distance, set the flag to False
                 self.isSymmetric = False
+                self.obstacleInSight = False
         #asymmetric detection
         for i in range(375, 639): #scans on the left side of the robot
             #same logic as the symmetric detection, see above for an explanation
             if(data.ranges[i] <= 0.5):
                 self.isAsymmetricLeft = True
+                self.obstacleInSight = True
                 break
             else:
                 #if there are no obstacles on the left of the robot within that distance, set the flag to False
                 self.isAsymmetricLeft = False
+                self.obstacleInSight = False
         for i in range(0, 265):
             #same logic as the symmetric detection, see above for an explanation
             if(data.ranges[i] <= 0.5):
                 self.isAsymmetricRight = True
+                self.obstacleInSight = True
                 break
             else:
                 #if there are no obstacles on the right of the robot within that distance, set the flag to False
                 self.isAsymmetricRight = False
+                self.obstacleInSight = False
 
     #defines what to do when arrow keys are used for teleoperation
     def on_press(self, key):
