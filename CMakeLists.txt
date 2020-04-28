@@ -9,13 +9,16 @@ project(project1)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   kobuki_msgs
+  cv_bridge
   rospy
   std_msgs
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-
+#find_package(OpenCV 2 REQUIRED)
+#include_directories(${OpenCV_INCLUDE_DIRS})
+#target_link_libraries(my_awesome_library ${OpenCV_LIBRARIES})
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
