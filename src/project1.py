@@ -4,10 +4,14 @@ import rospy
 from geometry_msgs.msg import Twist
 from kobuki_msgs.msg import BumperEvent
 from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Image
 from pynput import keyboard
 from pynput.keyboard import Key, Listener
 import random
 import math
+import cv2
+from cv_bridge import CvBridge, CvBridgeError
+import numpy as np
 
 
 class project1():
@@ -16,6 +20,7 @@ class project1():
 
         #this twist message is used throughout the class whenever we want to send movement messages to the robot
         self.move_cmd = Twist()
+        self.bridge_object = CvBridge()
 
         #various flags used to determine whether or not we have certain types of input that wil pre-empt others
         self.isBumped = False
@@ -24,6 +29,7 @@ class project1():
         self.isAsymmetricLeft = False
         self.isAsymmetricRight = False
         self.obstacleInSight = False
+        self.landmark = False
 
         #robot navigation messages will be published to this topic
         self.cmd_vel = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
@@ -34,6 +40,7 @@ class project1():
         #we subscribe to these topics in order to determine when the robot bumps into an object and to get its Laser Scan data
         self.bumper_sub = rospy.Subscriber('mobile_base/events/bumper', BumperEvent, self.BumperCallback)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.LaserCallback)
+        self.image_sub = rospy.Subscriber("camera/rgb/image_raw", Image, self.camera_callback)
 
         #on shutdown (when Ctrl + C is pressed) we execute our custom shutdown function
         rospy.on_shutdown(self.shutdown)
@@ -160,6 +167,10 @@ class project1():
 
                     #stop the robot by publishing an empty Twist message (has linear and angular velocity zero)
                     self.cmd_vel.publish(Twist())
+                #if there are no obstacles detected, see if we've found a landmark
+                elif(self.landmark):
+                    distance = LaserCallback.data.ranges[320]
+                    self.drive(distance, 0.5)
                 # if there are no obstacles detected, drive forwards and turn every meter
                 elif not(self.obstacleInSight):
                     rospy.loginfo(self.obstacleInSight)
@@ -291,6 +302,72 @@ class project1():
                 #if there are no obstacles on the right of the robot within that distance, set the flag to False
                 self.isAsymmetricRight = False
                 self.obstacleInSight = False
+
+    def camera_callback(self,data):
+        try:
+            # We select bgr8 because its the OpenCV encoding by default
+            cv_image = self.bridge_object.imgmsg_to_cv2(data, desired_encoding="bgr8")
+        except CvBridgeError as e:
+            print(e)
+
+        #cv2.imshow("Image window", cv_image)
+        height, width, channels = cv_image.shape
+        descentre = 0
+        rows_to_watch = 200
+        crop_img = cv_image[(height)/2+descentre:(height)/2+(descentre+rows_to_watch)][1:width]
+
+        # Convert from RGB to HSV
+        hsv = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
+
+        # Define the color in HSV
+        # RGB 
+        # [[[222, 255, 0]]]
+        # BGR
+        # [[[0, 255, 222]]]
+        '''
+        To know which color to track in HSV, Put in BGR. Use ColorZilla to get the color registered by the camera
+        >> gray = np.uint8([[[B,G,R]]])
+        >> hsv_yellow = cv2.cvtColor(gray, cv2.COLOR_BGR2HSV)
+        >> print(hsv_yellow)
+        '''
+        
+        # define lower and upper bgr values
+        lower_yellow = np.array([20,100,100])
+        upper_yellow = np.array([50,255,255])
+
+        # Threshold the HSV image to get only yellow colors
+        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+        # Calculate centroid of the blob of binary image using ImageMoments
+        m = cv2.moments(mask, False)
+        try:
+            cx, cy = m['m10']/m['m00'], m['m01']/m['m00'] 
+        except ZeroDivisionError:
+            cx, cy = height/2, width/2
+
+        # bitwise-AND mask and original image
+        res = cv2.bitwise_and(crop_img, crop_img, mask = mask)
+
+        # draw centroid in the resultant image
+        # cv2.circle(img, center, radius, color[, thickness[, linetype[, shift]]])
+        cv2.circle(res,(int(cx), int(cy)), 10,(0,0,255),-1)
+
+        cv2.imshow("Original", cv_image)
+        cv2.imshow("HSV", hsv)
+        cv2.imshow("MASK", mask)
+        cv2.imshow("RES", res)
+
+        # cv2.waitKey(1)
+
+        # error_x = cx - width/2
+        # twist_object = Twist()
+        # twist_object.linear.x = 0.2
+        # twist_object.angular.z = -error_x / 100
+        # rospy.loginfo("ANGULAR VALUE SENT===>"+str(twist_object.angular.z))
+        # #make it start turning
+        # self.cmd_vel.publish(self.twist_object)
+        # #if the robot has centered itself on the value, we can drive forwards.  Set the relevant flag to true
+        # self.landmark = True
 
     #defines what to do when arrow keys are used for teleoperation
     def on_press(self, key):
