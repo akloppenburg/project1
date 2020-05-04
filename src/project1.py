@@ -60,7 +60,6 @@ class project1():
             else:
                 #if symmetric obstacle is detected, complete full 180 spin and then continue
                 if(self.isSymmetric):
-                    rospy.loginfo(self.obstacleInSight)
                     #setting our desired angular velocity and desired angle
                     speed = 75
                     angle = 180
@@ -95,7 +94,6 @@ class project1():
                             
                 #if asymmetric obstacle is detected on the left, veer right
                 elif(self.isAsymmetricLeft):
-                    rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
@@ -130,7 +128,6 @@ class project1():
 
                 #if asymmetric obstacle is detected on the right, veer left
                 elif(self.isAsymmetricRight):
-                    rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
@@ -162,7 +159,6 @@ class project1():
                     self.cmd_vel.publish(Twist())
                 # if there are no obstacles detected, drive forwards and turn every meter
                 elif not(self.obstacleInSight):
-                    rospy.loginfo(self.obstacleInSight)
                     #drive one meter, stopping if any other events occur
                     self.drive(0.3, 0.3)
                     #turn randomly, stopping if any bump or key press events occur
