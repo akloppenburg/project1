@@ -33,6 +33,7 @@ class project1():
 
         #robot navigation messages will be published to this topic
         self.cmd_vel = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
+        self.image_pub = rospy.Publisher("image_topic_2",Image,queue_size=10)
 
         #initiation the main project node that our code runs from
         rospy.init_node('project1')
@@ -67,7 +68,7 @@ class project1():
             else:
                 #if symmetric obstacle is detected, complete full 180 spin and then continue
                 if(self.isSymmetric):
-                    rospy.loginfo(self.obstacleInSight)
+                    #rospy.loginfo(self.obstacleInSight)
                     #setting our desired angular velocity and desired angle
                     speed = 75
                     angle = 180
@@ -102,7 +103,7 @@ class project1():
                             
                 #if asymmetric obstacle is detected on the left, veer right
                 elif(self.isAsymmetricLeft):
-                    rospy.loginfo(self.obstacleInSight)
+                    # rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
@@ -137,7 +138,7 @@ class project1():
 
                 #if asymmetric obstacle is detected on the right, veer left
                 elif(self.isAsymmetricRight):
-                    rospy.loginfo(self.obstacleInSight)
+                    #rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
@@ -173,7 +174,7 @@ class project1():
                     self.drive(distance, 0.5)
                 # if there are no obstacles detected, drive forwards and turn every meter
                 elif not(self.obstacleInSight):
-                    rospy.loginfo(self.obstacleInSight)
+                    # rospy.loginfo(self.obstacleInSight)
                     #drive one meter, stopping if any other events occur
                     self.drive(0.3, 0.3)
                     #turn randomly, stopping if any bump or key press events occur
@@ -305,69 +306,76 @@ class project1():
 
     def camera_callback(self,data):
         try:
-            # We select bgr8 because its the OpenCV encoding by default
             cv_image = self.bridge_object.imgmsg_to_cv2(data, desired_encoding="bgr8")
         except CvBridgeError as e:
             print(e)
 
-        #cv2.imshow("Image window", cv_image)
-        height, width, channels = cv_image.shape
-        descentre = 0
-        rows_to_watch = 200
-        crop_img = cv_image[(height)/2+descentre:(height)/2+(descentre+rows_to_watch)][1:width]
 
-        # Convert from RGB to HSV
+        # get a window image of the turtlebot's rgb camera
+        cv2.imshow("Image window", cv_image)
+
+
+
+        
+
+        try:
+            self.image_pub.publish(self.bridge_object.cv2_to_imgmsg(cv_image, "bgr8"))
+        except CvBridgeError as e:
+            print(e)
+
+        # We get the image dimensions and crop the parts of the image we dont neeed
+        # Keep in mind that is because its image matrix first value is start and second value is down limit.
+        # Select the limits so that it gets the line not too close, not too far and the minimum portion possible 
+        # To make process faster
+        height, width, channels = cv_image.shape
+        descentre = 160
+        rows_to_watch = 20
+        crop_img = cv_image[(height)/2+descentre:(height)/2+(descentre+rows_to_watch)][1:width]
+            
+        # 2.) Convert from BGR to HSV
         hsv = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
+        hsv_resized = cv2.resize(hsv, (643, 50))
 
         # Define the color in HSV
         # RGB 
         # [[[222, 255, 0]]]
         # BGR
         # [[[0, 255, 222]]]
-        '''
-        To know which color to track in HSV, Put in BGR. Use ColorZilla to get the color registered by the camera
-        >> gray = np.uint8([[[B,G,R]]])
-        >> hsv_yellow = cv2.cvtColor(gray, cv2.COLOR_BGR2HSV)
-        >> print(hsv_yellow)
-        '''
-        
-        # define lower and upper bgr values
+
+        # Determine the lower and upper HSV color values to track, this helps
+        # with color variants depending on the lighting in the environment
         lower_yellow = np.array([20,100,100])
         upper_yellow = np.array([50,255,255])
 
+        # 3.) Apply Mask
+
         # Threshold the HSV image to get only yellow colors
         mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        mask_resized = cv2.resize(mask, (643, 50))
+
+        # Bitwise-AND- mask and original image
+        res = cv2.bitwise_and(crop_img,crop_img, mask= mask)
+        res_resized = cv2.resize(res, (643, 50))
+
+        # 4.) Get the Centroids, draw a circle where the centroid is and show all the images
 
         # Calculate centroid of the blob of binary image using ImageMoments
         m = cv2.moments(mask, False)
         try:
-            cx, cy = m['m10']/m['m00'], m['m01']/m['m00'] 
+            cx, cy = m['m10']/m['m00'], m['m01']/m['m00']
         except ZeroDivisionError:
             cx, cy = height/2, width/2
 
-        # bitwise-AND mask and original image
-        res = cv2.bitwise_and(crop_img, crop_img, mask = mask)
-
-        # draw centroid in the resultant image
-        # cv2.circle(img, center, radius, color[, thickness[, linetype[, shift]]])
-        cv2.circle(res,(int(cx), int(cy)), 10,(0,0,255),-1)
+        # Draw the centroid in the result image
+        # cv2.circle(img, center, radius, color[, thickness[, lineType, shift]]])
+        cv2.circle(res_resized,(int(cx), int(cy)), 10,(0,0,255), -1)
 
         cv2.imshow("Original", cv_image)
-        cv2.imshow("HSV", hsv)
-        cv2.imshow("MASK", mask)
-        cv2.imshow("RES", res)
+        cv2.imshow("HSV", hsv_resized)
+        cv2.imshow("MASK", mask_resized)
+        cv2.imshow("RES", res_resized)
 
-        # cv2.waitKey(1)
-
-        # error_x = cx - width/2
-        # twist_object = Twist()
-        # twist_object.linear.x = 0.2
-        # twist_object.angular.z = -error_x / 100
-        # rospy.loginfo("ANGULAR VALUE SENT===>"+str(twist_object.angular.z))
-        # #make it start turning
-        # self.cmd_vel.publish(self.twist_object)
-        # #if the robot has centered itself on the value, we can drive forwards.  Set the relevant flag to true
-        # self.landmark = True
+        cv2.waitKey(3)
 
     #defines what to do when arrow keys are used for teleoperation
     def on_press(self, key):
