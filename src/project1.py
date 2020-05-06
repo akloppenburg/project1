@@ -314,10 +314,6 @@ class project1():
         # get a window image of the turtlebot's rgb camera
         cv2.imshow("Image window", cv_image)
 
-
-
-        
-
         try:
             self.image_pub.publish(self.bridge_object.cv2_to_imgmsg(cv_image, "bgr8"))
         except CvBridgeError as e:
@@ -334,6 +330,7 @@ class project1():
             
         # 2.) Convert from BGR to HSV
         hsv = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
+        # ressize hsv window to be a bit more clearer
         hsv_resized = cv2.resize(hsv, (643, 50))
 
         # Define the color in HSV
@@ -351,10 +348,13 @@ class project1():
 
         # Threshold the HSV image to get only yellow colors
         mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        
+        # ressize mask window to be a bit more clearer
         mask_resized = cv2.resize(mask, (643, 50))
 
         # Bitwise-AND- mask and original image
         res = cv2.bitwise_and(crop_img,crop_img, mask= mask)
+        # ressize res window to be a bit more clearer
         res_resized = cv2.resize(res, (643, 50))
 
         # 4.) Get the Centroids, draw a circle where the centroid is and show all the images
