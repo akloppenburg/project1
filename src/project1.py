@@ -21,6 +21,8 @@ class project1():
 
         #this twist message is used throughout the class whenever we want to send movement messages to the robot
         self.move_cmd = Twist()
+
+        # used for opencv object detection
         self.bridge_object = CvBridge()
 
         #various flags used to determine whether or not we have certain types of input that wil pre-empt others
@@ -36,12 +38,11 @@ class project1():
 
         #robot navigation messages will be published to this topic
         self.cmd_vel = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
-        #self.image_pub = rospy.Publisher("image_topic_2", Image, queue_size=10)
 
         #initiation the main project node that our code runs from
         rospy.init_node('project1')
 
-        #we subscribe to these topics in order to determine when the robot bumps into an object and to get its Laser Scan data
+        #we subscribe to these topics in order to determine when the robot bumps into an object and to get its Laser Scan and Image data
         self.bumper_sub = rospy.Subscriber('mobile_base/events/bumper', BumperEvent, self.BumperCallback)
         self.laser_sub = rospy.Subscriber('/scan', LaserScan, self.LaserCallback)
         self.image_sub = rospy.Subscriber("camera/rgb/image_raw", Image, self.camera_callback)
@@ -173,7 +174,7 @@ class project1():
                     self.cmd_vel.publish(Twist())
                 #if there are no obstacles detected, see if we've found a landmark, turn as needed
                 elif self.landmarkLeft:
-                    # turn a bit
+                    # these movement commands equal a slow left turn
                     self.move_cmd.linear.x=0
                     self.move_cmd.linear.y=0
                     self.move_cmd.linear.z=0
@@ -182,7 +183,7 @@ class project1():
                     self.move_cmd.angular.z = 0.05
                     self.cmd_vel.publish(self.move_cmd)
                 elif self.landmarkRight:
-                    # turn a bit
+                    # these movement commands equal a slow right turn
                     self.move_cmd.linear.x=0
                     self.move_cmd.linear.y=0
                     self.move_cmd.linear.z=0
@@ -191,7 +192,7 @@ class project1():
                     self.move_cmd.angular.z = -0.05
                     self.cmd_vel.publish(self.move_cmd)
                 elif self.landmarkDrive and not self.isSymmetric:
-                    # drive a bit
+                    # drive forwards
                     self.move_cmd.linear.x=0.5
                     self.move_cmd.linear.y=0
                     self.move_cmd.linear.z=0
@@ -201,7 +202,6 @@ class project1():
                     self.cmd_vel.publish(self.move_cmd)
                 # if there are no obstacles detected, drive forwards and turn every meter
                 elif not(self.obstacleInSight):
-                    # rospy.loginfo(self.obstacleInSight)
                     #drive one meter, stopping if any other events occur
                     self.drive(0.3, 0.3)
                     #turn randomly, stopping if any bump or key press events occur
@@ -331,48 +331,25 @@ class project1():
                 self.isAsymmetricRight = False
                 self.obstacleInSight = False
 
+    #sets various flags based on whether or not an object is detected
     def camera_callback(self,data):
+        #get image from camera
         try:
             cv_image = self.bridge_object.imgmsg_to_cv2(data, desired_encoding="bgr8")
         except CvBridgeError as e:
             print(e)
 
-
-        # get a window image of the turtlebot's rgb camera
-        #cv2.imshow("Image window", cv_image)
-
-        # try:
-        #     self.image_pub.publish(self.bridge_object.cv2_to_imgmsg(cv_image, "bgr8"))
-        # except CvBridgeError as e:
-        #     print(e)
-
-        # We get the image dimensions and crop the parts of the image we dont neeed
-        # Keep in mind that is because its image matrix first value is start and second value is down limit.
-        # Select the limits so that it gets the line not too close, not too far and the minimum portion possible 
-        # To make process faster
+        #get image bounds
         height, width, channels = cv_image.shape
-        # descentre = 160
-        # rows_to_watch = 20
-        # crop_img = cv_image[(height)/2+descentre:(height)/2+(descentre+rows_to_watch)][1:width]
-            
-        # 2.) Convert from BGR to HSV
+
+        #Convert from BGR to HSV
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-        # ressize hsv window to be a bit more clearer
-        #hsv_resized = cv2.resize(hsv, (643, 500))
-
-        # Define the color in HSV
-        # RGB 
-        # [[[222, 255, 0]]]
-        # BGR
-        # [[[0, 255, 222]]]
-
         # Determine the lower and upper HSV color values to track, this helps
         # with color variants depending on the lighting in the environment
         lower_yellow = np.array([20,100,100])
         upper_yellow = np.array([30,255,255])
 
-        # 3.) Apply Mask
-
+        # Apply mask
         # Threshold the HSV image to get only yellow colors
         mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
 
@@ -386,65 +363,33 @@ class project1():
             M = cv2.moments(c)
             cx = int(M["m10"]/M["m00"])
             cy = int(M["m01"]/M["m00"])
+            #draw contours as green lines
             cv2.drawContours(cv_image, [c], -1, (0, 255, 0), 2)
+            #draw centroid as white circle
             cv2.circle(cv_image, (cx, cy), 7, (255, 255, 255), -1)
-            # draw the contour and center of the shape on the image
+
+            # if centroid is left of center, turn left to center it
             if cx < (width/2 - 25):
                 rospy.loginfo("left turn" + str(cx))
                 self.landmarkDrive = False
                 self.landmarkLeft = True
+            #if centroid is right of center, turn right to center it
             elif cx > (width/2 + 25):
                 rospy.loginfo("right turn" + str(cx))
                 self.landmarkDrive = False
                 self.landmarkRight = True
+            #if centroid is in center of image, drive forwards
             else:
                 rospy.loginfo("drive" + str(cx))
                 self.landmarkLeft = False
                 self.landmarkRight = False
                 self.landmarkDrive = True
         
-        # ressize mask window to be a bit more clearer
-        #mask_resized = cv2.resize(mask, (643, 500))
-
-        # Bitwise-AND- mask and original image
-        #res = cv2.bitwise_and(cv_image,cv_image, mask= mask)
-        # ressize res window to be a bit more clearer
-        #res_resized = cv2.resize(res, (643, 500))
-
-        # 4.) Get the Centroids, draw a circle where the centroid is and show all the images
-
-        # Calculate centroid of the blob of binary image using ImageMoments
-        # m = cv2.moments(mask, True)
-        # try:
-        #     cx, cy = m['m10']/m['m00'], m['m01']/m['m00']
-        # except ZeroDivisionError:
-        #     cx, cy = height/2, width/2
-
-        # Draw the centroid in the result image
-        # cv2.circle(img, center, radius, color[, thickness[, lineType, shift]]])
-        # cv2.circle(mask_resized,(int(cx), int(cy)), 10,(0,0,255), -1)
-        # cv2.circle(cv_image,(int(cx), int(cy)), 10,(0,0,255), -1)
-        
-        # # turn robot if the centroid is not in the center of the image
-        # if (cx != width/2) and (cx < 300):
-        #     rospy.loginfo("right turn")
-        #     self.landmarkDrive = False
-        #     self.landmarkRight = True
-        # elif (cx != width/2) and (cx > 350):
-        #     rospy.loginfo("left turn")
-        #     self.landmarkDrive = False
-        #     self.landmarkLeft = True
-        # else:
-        #     rospy.loginfo("drive")
-        #     self.landmarkLeft = False
-        #     self.landmarkRight = False
-        #     self.landmarkDrive = True
-
+        #display original, hsv view and mask
         cv2.imshow("Original", cv_image)
         cv2.imshow("HSV", hsv)
         cv2.imshow("MASK", mask)
-        #cv2.imshow("RES", res_resized)
-
+        #wait for new input
         cv2.waitKey(3)
 
     #defines what to do when arrow keys are used for teleoperation
