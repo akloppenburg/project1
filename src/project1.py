@@ -142,7 +142,6 @@ class project1():
 
                 #if asymmetric obstacle is detected on the right, veer left
                 elif(self.isAsymmetricRight):
-                    #rospy.loginfo(self.obstacleInSight)
                     #small angle of rotation with high speed so that we can veer rather than turning
                     speed = 30
                     angle = 10
